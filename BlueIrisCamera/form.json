@@ -1,0 +1,6 @@
+{
+	"elements":
+	[
+                { "type": "ValidationTextBox",  "name": "CamID",    "caption": "Canera ID" }
+	]
+}

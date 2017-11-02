@@ -1,0 +1,14 @@
+{
+	"id": "{695BAF6A-A6CB-4989-9659-1C55B81FD458}",
+	"name": "BlueIrisSplitter",
+	"type": 2, 
+	"vendor": "Daniel Schäfer",
+	"aliases":  
+	[
+		"BlueIrisSplitter"
+	],
+	"parentRequirements": ["{79827379-F36E-4ADA-8A95-5F8D1DC92FA9}"],
+	"childRequirements": [],
+	"implemented": ["{018EF6B5-AB94-40C6-AA53-46943E824ACF}", "{01AABE59-055A-4B4E-BCE0-C7B1217FF29C}", "{0AD5DC4B-6CE8-4979-8064-33B7895D6ACA}", "{ED01C3C3-22CF-4F37-9FF4-9D366973853D}"],
+	"prefix": "BLUEIRISSPLITTER"
+}
