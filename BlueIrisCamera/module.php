@@ -165,7 +165,7 @@ class BlueIrisCamera extends IPSModule
                                                 'isRecording' => 'BLUEIRIS.Record'
                                         );
 
-        $skipAutoCreation = array("mediaURL");
+        $skipAutoCreation = array("mediaURL", "pictureURL");
 
         //camera properties as variables
         foreach($cam as $key => $value) {
@@ -256,6 +256,16 @@ class BlueIrisCamera extends IPSModule
                 IPS_SetMediaFile($media, $cam['mediaURL'], true);
             }
         }
+
+        $pictureHTML = @IPS_GetObjectIDByIdent("pictureHTML", $this->InstanceID);
+        if(!$pictureHTML) {
+            $pictureHTML = IPS_CreateVariable(3);
+            IPS_SetIdent($pictureHTML, "pictureHTML");
+            IPS_SetName($pictureHTML, "Kamera Standbild");  
+            IPS_SetParent($pictureHTML, $this->InstanceID);
+            IPS_SetVariableCustomProfile($pictureHTML, "~HTMLBox");   
+        }
+        SetValue($pictureHTML, "<img src='".$cam['pictureURL']."'>");
 
         // hide/unhide variables upon enabled state
         foreach(IPS_GetChildrenIDs($this->InstanceID) as $childID) {

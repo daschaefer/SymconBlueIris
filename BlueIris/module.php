@@ -247,6 +247,7 @@ class BlueIris extends IPSModule
                     }
 
                     $cam['mediaURL'] = $this->BuildMediaURL($cam["optionValue"]);
+                    $cam['pictureURL'] = $this->BuildPictureURL($cam["optionValue"]);
 
                     $message['DataID'] = "{ED01C3C3-22CF-4F37-9FF4-9D366973853D}";
                     $message['Buffer'][] = $cam;
@@ -327,6 +328,19 @@ class BlueIris extends IPSModule
             
             if(strlen($this->ReadPropertyString("Username")) > 0 && strlen($this->ReadPropertyString("Password")) > 0)
                 $return .= '?user='.$this->ReadPropertyString("Username").'&pw='.$this->ReadPropertyString("Password");
+
+            return $return;
+        }
+        else
+            return null;
+    }
+
+    private function BuildPictureURL($camid) {
+        if(strlen($this->ReadPropertyString("IPAddress")) > 0 && strlen($this->ReadPropertyInteger("Port")) > 0 && strlen($camid) > 0) {
+            $return = 'http://'.$this->ReadPropertyString("IPAddress").':'.$this->ReadPropertyInteger("Port").'/image/'.$camid.'?time=0&d='.time();
+            
+            if(strlen($this->ReadPropertyString("Username")) > 0 && strlen($this->ReadPropertyString("Password")) > 0)
+                $return .= '&user='.$this->ReadPropertyString("Username").'&pw='.$this->ReadPropertyString("Password");
 
             return $return;
         }
