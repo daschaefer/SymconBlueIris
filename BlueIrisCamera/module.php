@@ -257,6 +257,19 @@ class BlueIrisCamera extends IPSModule
             }
         }
 
+        $media = @IPS_GetMediaIDByName("Kamera Standbild", $this->InstanceID);
+        if(!$media) {
+            $media = IPS_CreateMedia(3);
+            IPS_SetName($media, "Kamera Standbild");
+            IPS_SetMediaFile($media, $cam['pictureURL'], true);
+            IPS_SetParent($media, $this->InstanceID);
+        }
+        else {
+            if(md5(IPS_GetMedia($media)['MediaFile']) != md5($cam['pictureURL'])) {
+                IPS_SetMediaFile($media, $cam['pictureURL'], true);
+            }
+        }
+
         $pictureHTML = @IPS_GetObjectIDByIdent("pictureHTML", $this->InstanceID);
         if(!$pictureHTML) {
             $pictureHTML = IPS_CreateVariable(3);
