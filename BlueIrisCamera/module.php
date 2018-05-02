@@ -274,7 +274,7 @@ class BlueIrisCamera extends IPSModule
         if(!$pictureHTML) {
             $pictureHTML = IPS_CreateVariable(3);
             IPS_SetIdent($pictureHTML, "pictureHTML");
-            IPS_SetName($pictureHTML, "Kamera Standbild");  
+            IPS_SetName($pictureHTML, "pictureHTML");  
             IPS_SetParent($pictureHTML, $this->InstanceID);
             IPS_SetVariableCustomProfile($pictureHTML, "~HTMLBox");   
         }

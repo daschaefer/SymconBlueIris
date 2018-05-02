@@ -13,7 +13,7 @@ class BlueIris extends IPSModule
         $this->RegisterPropertyInteger("Interval", 5);
         $this->RegisterPropertyString("Username", "admin");
         $this->RegisterPropertyString("Password", "");
-        $this->RegisterPropertyString("TriggerVariable", "isAlarming");
+        $this->RegisterPropertyString("TriggerVariable", "isTriggered");
     }
     
     public function ApplyChanges()
@@ -228,7 +228,7 @@ class BlueIris extends IPSModule
 
             if($result != null) {
                 foreach($result["data"] as $cam) {
-                    if($cam["optionValue"] == "index" || $cam["optionValue"] == "@index")
+                    if($cam["optionValue"] == "index" || $cam["optionValue"] == "@index" || $cam["optionValue"] == "Index" || $cam["optionValue"] == "@Index")
                         continue;
 
                     $cameraInstance = @IPS_GetInstanceIDByName("Kamera: ".$cam["optionDisplay"], $this->InstanceID);
