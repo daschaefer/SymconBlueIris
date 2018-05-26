@@ -27,8 +27,12 @@ class BlueIrisSplitter extends IPSModule
         // IPS_LogMessage("IOSplitter FRWD", utf8_decode($JSONString));
 
         // if not directly addressed to splitter itself, then forward whole message
-        if($data->DataID != "{01AABE59-055A-4B4E-BCE0-C7B1217FF29C}") 
-            $this->SendDataToChildren($JSONString);
+        if(property_exists($data, 'DataID')) {
+            if($data->DataID != "{01AABE59-055A-4B4E-BCE0-C7B1217FF29C}") 
+                $this->SendDataToChildren($JSONString);
+        } else {
+            $this->ModuleLogMessage("Unbekannter Verbindungsfehler - Häufige Ursachen: Username oder Passwort falsch, IP-Adresse wurde wegen Falschanmeldung gesperrt.");
+        }
 
         //Normally we would wait here for ReceiveData getting called asynchronically and buffer some data
         //Then we should extract the relevant feedback/data and return it to the caller
@@ -43,6 +47,10 @@ class BlueIrisSplitter extends IPSModule
     //     //Lets just forward to our children
     //     $this->SendDataToChildren(json_encode(Array("DataID" => "{ED01C3C3-22CF-4F37-9FF4-9D366973853D}", "Buffer" => $data->Buffer)));
     // }
+
+    protected function ModuleLogMessage($message) {
+        IPS_LogMessage(IPS_GetObject($this->InstanceID)['ObjectName'], $message);
+    }
 }
 
 ?>

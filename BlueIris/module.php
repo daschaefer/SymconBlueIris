@@ -261,13 +261,12 @@ class BlueIris extends IPSModule
                         }
                     }
                 }
-            }
 
-            try {
-                $this->SendDataToParent(json_encode($message));    
-            } catch (Exception $e) {
+                try {
+                    $this->SendDataToParent(json_encode($message));    
+                } catch (Exception $e) {
+                }
             }
-            
         }
     }
 
