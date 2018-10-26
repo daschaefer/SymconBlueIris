@@ -1,6 +1,10 @@
 {
 	"elements":
 	[
-                { "type": "ValidationTextBox",  "name": "CamID",    "caption": "Canera ID" }
+				{ "type": "ValidationTextBox",  "name": "CamID",    "caption": "Canera ID" },
+				{ "type": "Select",             "name": "LoadCameraVariables",      "caption": "Kameravariablen:",  "options": [
+					{ "label": "Minimal", "value": "minimal"},
+					{ "label": "Vollständig", "value": "full"}
+			]}
 	]
 }

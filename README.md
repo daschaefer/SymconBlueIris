@@ -1,6 +1,6 @@
-BlueIris Module für IP-Symcon
+BlueIris v2 Module für IP-Symcon
 ===
-Dieses IP-Symcon PHP Modul ermöglicht die Steuerung von BlueIris auf einem Windows PC.
+Dieses IP-Symcon PHP Modul ermöglicht die Verwendung von Netzwerkkameras über BlueIris
 
 **Content**
 
@@ -12,20 +12,19 @@ Dieses IP-Symcon PHP Modul ermöglicht die Steuerung von BlueIris auf einem Wind
 ## 1. Funktionsumfang  
 Die folgenden Funktionalitäten sind implementiert:
 - Abfragen der Streams als Mediaobjekt
-- Kameras Aktivieren/Deaktivieren
-- alle Kameraparameter sind als Variable verfügbar
-- Alarmierung bei Bewegung aktivierbar/deaktivierbar
-- Abfragen des Alarmbildes
-- PTZ Steuerung der Kameras (wenn Unterstützt)
+- Kameras aktivieren/deaktivieren/pausieren
+- Motion Detection aktivieren/deaktiviere
+- Kameraparameter wählbar: minimal/vollständig (minimal ist Standard da deutlich weniger Variablen verwendet werden)
+- Abfragen des Alarmbildes als ID
 
 ## 2. Anforderungen
-- IP-Symcon 4.x installation (Linux / Windows)
+- IP-Symcon 5.x installation (Linux / Windows)
 - Bereits installiertes und konfiguriertes BlueIris
 
 ## 3. Vorbereitung & Installation & Konfiguration
 
-### Installation in IPS 4.x
-Im "Module Control" (Kern Instanzen->Modules) die URL "https://github.com/daschaefer/SymconBlueIris.git" hinzufügen.  
+### Installation in IPS 5.x
+Im "Module Control" (Kern Instanzen->Modules) die URL "https://github.com/daschaefer/SymconBlueIris.git" mit dem Repository v2 hinzufügen.  
 Danach ist es möglich eine neue BlueIris Instanz innerhalb des Objektbaumes von IP-Symcon zu erstellen. Nach erfolgreicher Konfiguration des Moduls werden automatisch alle Kameras als neue BlueIrisCamera Instanzen angelegt.
 
 ### Konfiguration
@@ -43,7 +42,7 @@ Danach ist es möglich eine neue BlueIris Instanz innerhalb des Objektbaumes von
 
 **Intervall:**
 
-*Aktualisierungsintervall der Variablen und Zustände der Kameras in Sekunden (Standard: 3)*
+*Aktualisierungsintervall der Variablen und Zustände der Kameras in Sekunden (Standard: 3). Der Wert 0 deaktiviert die Kommunikation zu BlueIris*
 
 **Username:**
 
@@ -53,9 +52,6 @@ Danach ist es möglich eine neue BlueIris Instanz innerhalb des Objektbaumes von
 
 *Passwort für den Zugriff auf den BlueIris Server*
 
-**Alarmauslöser:**
-
-*Es gibt zwei Möglichkeiten einen Alarm auszulösen: isTriggered oder isAlerting, dies muss ausprobiert werden*
 
 ## 4. Funktionen
 
@@ -104,7 +100,7 @@ Setzt den Alarm zurück
 ```php
 BLUEIRIS_Update(InstanceID: Integer)
 ```
-Interne Updateroutine
+Interne Updateroutine (sollte nicht verwendet werden)
 
 ---
 ```php
@@ -135,12 +131,6 @@ Pausiert die Kamera
 BLUEIRISCAMERA_PTZ(InstanceID: Integer, value: Variant)
 ```
 PTZ Steuerung der Kamera
-
----
-```php
-BLUEIRISCAMERA_Record(InstanceID: Integer, state: Variant)
-```
-Aktiviert / Deaktiviert die Aufnahmefunktion der Kamera
 
 ---
 ```php

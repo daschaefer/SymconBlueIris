@@ -24,35 +24,12 @@ class BlueIris extends IPSModule
 
         $this->ConnectParent("{695BAF6A-A6CB-4989-9659-1C55B81FD458}");
 
-        // do not allow update interval to be less than 5
+        // do not allow update interval lower than intervalLimit
         $interval = IPS_GetProperty($this->InstanceID, "Interval");
-        if($interval < $intervalLimit) {
+        if($interval > 0  && $interval < $intervalLimit) {
             IPS_SetProperty($this->InstanceID, "Interval", $intervalLimit);
             IPS_ApplyChanges($this->InstanceID);
-            $interval = $intervalLimit;
         }
-
-
-        // Create SocketController script
-        $updateScriptID = @$this->GetIDForIdent("update");
-        if($updateScriptID === false) {
-            $updateScriptID = $this->RegisterScript("update", "update", file_get_contents(__DIR__ . "/update.php"), 100);
-        } else {
-            IPS_SetScriptContent($updateScriptID, file_get_contents(__DIR__ . "/update.php"));
-        }
-        IPS_SetHidden($updateScriptID, true);
-
-        $updateCheck = @IPS_GetEventIDByName("updatecheck", $updateScriptID);
-        if(!$updateCheck) {
-            $updateCheck = IPS_CreateEvent(1);
-            IPS_SetParent($updateCheck, $updateScriptID);
-            IPS_SetName($updateCheck, "updatecheck");
-        }
-        IPS_SetEventCyclic($updateCheck, 0, 0, 0, 2, 1, $interval);
-        if($interval > 0)
-            IPS_SetEventActive($updateCheck, true);
-        else
-            IPS_SetEventActive($updateCheck, false);
 
         // Create variable profiles
         $this->RegisterProfileBooleanEx("BLUEIRIS.AlarmState", "", "", "", Array(
@@ -67,11 +44,6 @@ class BlueIris extends IPSModule
         $this->RegisterProfileBooleanEx("BLUEIRIS.Switch", "", "", "", Array(
                                                                                 Array(false, "Aus", "", -1),
                                                                                 Array(true, "Ein", "", 0x00FF00)
-                                                                         ));
-
-        $this->RegisterProfileBooleanEx("BLUEIRIS.Record", "", "", "", Array(
-                                                                                Array(false, "Aus", "", -1),
-                                                                                Array(true, "Ein", "", 0xFF0000)
                                                                          ));
 
         $this->RegisterProfileIntegerEx("BLUEIRIS.PTZ", "", "", "", Array(
@@ -180,13 +152,37 @@ class BlueIris extends IPSModule
         $data = json_decode($JSONString, true);
         if(isset($data['DataID'])) {
             if($data['DataID'] == "{0AD5DC4B-6CE8-4979-8064-33B7895D6ACA}") {
-                // IPS_LogMessage("BlueIris", "JSON: ".$JSONString);
                 $buffer = $data['Buffer'];
-                if($buffer['cmd'] == "camconfig" || $buffer['cmd'] == "ptz") {
-                    $result = $this->Query($buffer);
+
+                if($buffer['cmd'] == '_getMedia') {
+                    $result = $this->GetMedia($buffer['camera']);
+
+                    $message = null;
+                    $message = $result;
+                    $message['cmd'] = $buffer['cmd'];
+                    $message['optionValue'] = $buffer['camera'];
+
+                    $this->SendToBlueIrisCamera($message); // return data to camera instance
+                }
+                else {
+                    $result = json_decode($this->Query($buffer), true);
+                    if($result != null && $result['result'] == "success") {
+                        $message = null;
+                        $message = $result['data'];
+                        $message['cmd'] = $buffer['cmd'];
+                        $message['optionValue'] = $buffer['camera'];
+                        $this->SendToBlueIrisCamera($message); // return data to camera instance
+                    }
                 }
             }
         }
+    }
+
+    public function GetMedia($optionValue) {
+        $cam['mediaURL'] = $this->BuildMediaURL($optionValue);
+        $cam['pictureURL'] = $this->BuildPictureURL($optionValue);
+
+        return $cam;
     }
 
     public function GetAlertList($time=0) {
@@ -220,6 +216,10 @@ class BlueIris extends IPSModule
     }
 
     public function Update() {
+        $this->UpdateCameraList();
+    }
+
+    public function UpdateCameraList() {
         if(strlen($this->ReadPropertyString("IPAddress")) > 0 && strlen($this->ReadPropertyInteger("Port")) > 0 && strlen(IPS_GetProperty($this->InstanceID, "Username")) > 0) {
             $result = json_decode($this->GetCamList(), true);
 
@@ -246,25 +246,12 @@ class BlueIris extends IPSModule
                         IPS_ApplyChanges($cameraInstance);    
                     }
 
-                    $cam['mediaURL'] = $this->BuildMediaURL($cam["optionValue"]);
-                    $cam['pictureURL'] = $this->BuildPictureURL($cam["optionValue"]);
-
-                    $message['DataID'] = "{ED01C3C3-22CF-4F37-9FF4-9D366973853D}";
-                    $message['Buffer'][] = $cam;
-
-                    // alerting
-                    if($cam['isEnabled'] == true) {
-                        if($cam[IPS_GetProperty($this->InstanceID, "TriggerVariable")] == true) {
-                            if(GetValue(IPS_GetObjectIDByIdent("AlarmTrigger", $this->InstanceID)) == "") { 
-                                $this->SetAlarm($cam);
-                            }
-                        }
-                    }
-                }
-
-                try {
-                    $this->SendDataToParent(json_encode($message));    
-                } catch (Exception $e) {
+                    // send refresh update info to camera instance
+                    $this->SendToBlueIrisCamera(array(
+                                                        'cmd' => 'UpdateCheck', 
+                                                        'optionValue' => $cam['optionValue'],
+                                                        'interval' => IPS_GetProperty($this->InstanceID, "Interval")
+                                                    ));
                 }
             }
         }
@@ -275,8 +262,9 @@ class BlueIris extends IPSModule
 
         $session = $this->Connect();
         if($session != null) {
-            $param["session"] = $session;
+            $param['session'] = $session;
             $result = $this->SendToBlueIrisServer($param);
+
             $this->Disconnect($session);
         }
 
@@ -368,10 +356,11 @@ class BlueIris extends IPSModule
     private function SendToBlueIrisServer(array $param) {
         $result = null;
 
-        $url = $this->BuildURL(); 
+        $url = $this->BuildURL();
 
         if($url != null) {
-            $ch = curl_init($url);  
+            $ch = curl_init($url); 
+             
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");                                                                       
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); 
             curl_setopt($ch,CURLOPT_CONNECTTIMEOUT, $this->ReadPropertyInteger("Timeout"));
@@ -391,8 +380,18 @@ class BlueIris extends IPSModule
             }
             curl_close($ch);
         }
-
+        
         return $result;
+    }
+
+    private function SendToBlueIrisCamera(array $param) {
+        $message['DataID'] = "{ED01C3C3-22CF-4F37-9FF4-9D366973853D}";
+        $message['Buffer'][] = $param;
+
+        try {
+            $this->SendDataToParent(json_encode($message));    
+        } catch (Exception $e) {
+        }
     }
 
     private function Connect() {

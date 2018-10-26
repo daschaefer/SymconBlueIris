@@ -7,6 +7,7 @@ class BlueIrisCamera extends IPSModule
         parent::Create();
         
         $this->RegisterPropertyString("CamID", "");
+        $this->RegisterPropertyString("LoadCameraVariables", "minimal");
     }
     
     public function ApplyChanges()
@@ -35,7 +36,7 @@ class BlueIrisCamera extends IPSModule
             case "isRecording":
                 $this->Record($Value);
                 break;
-            case "isMotionDetecting":
+            case "isMotion":
                 $this->MotionDetection($Value);
                 break;
             default:
@@ -113,20 +114,12 @@ class BlueIrisCamera extends IPSModule
     }
 
     public function MotionDetection($state) {
-        $var = IPS_GetObjectIDByIdent("isMotionDetecting", $this->InstanceID);
+        $var = IPS_GetObjectIDByIdent("isMotion", $this->InstanceID);
         SetValue($var, $state);
 
         $param = array();
         $param['cmd'] = 'camconfig';
         $param['motion'] = $state;
-
-        $this->QueryParent($param);
-    }
-
-    public function Record($state) {
-        $param = array();
-        $param['cmd'] = 'camconfig';
-        $param['record'] = $state;
 
         $this->QueryParent($param);
     }
@@ -143,34 +136,164 @@ class BlueIrisCamera extends IPSModule
         $data = json_decode($JSONString, true);
 
         if($data['DataID'] == "{ED01C3C3-22CF-4F37-9FF4-9D366973853D}") {
-            // IPS_LogMessage("BlueIrisCamera", "JSON: ".$JSONString);
             $data = $data['Buffer'];
-            foreach($data as $cam) {
+            foreach($data as $cam) { // only update corresponding camera
                 if($cam['optionValue'] == IPS_GetProperty($this->InstanceID, "CamID")) {
-                    $this->Update($cam);
+                    if(isset($cam['cmd'])) {
+                        switch ($cam['cmd']) {
+                            case 'UpdateCheck':
+                                $this->UpdateCheck($cam['interval']);
+                                break;
+                            case '_getMedia':
+                                $this->UpdateMedia($cam);
+                                break;
+                            default:
+                                $this->UpdateVariables($cam);
+                                break;
+                        }
+                    }
                 }
             }
         }
     }
 
-    // PRIVATE FUNCTIONS
-    private function GetCamID() {
-        return IPS_GetProperty($this->InstanceID, "CamID");
+    public function Update() {
+        $this->QueryParent(array('cmd' => 'camlist'));
+        $this->QueryParent(array('cmd' => 'camconfig'));
+        $this->QueryParent(array('cmd' => '_getMedia'));
     }
 
-    private function Update($cam) {
-        $userControlledProperties =     array(
-                                                'isEnabled' => 'BLUEIRIS.Switch',
-                                                'isPaused' => 'BLUEIRIS.Switch',
-                                                'isRecording' => 'BLUEIRIS.Record'
-                                        );
+    // PRIVATE FUNCTIONS
+    private function UpdateVariables($in) {
+        /*
+        camlist Array
+        (
+            [optionDisplay] => Haustuer
+            [optionValue] => Cam1
+            [active] => 1
+            [FPS] => 6.28
+            [color] => 8151097
+            [ptz] => 
+            [audio] => 
+            [width] => 1920
+            [height] => 1080
+            [newalerts] => 0
+            [lastalert] => -1
+            [alertutc] => 1527526323
+            [webcast] => 1
+            [isEnabled] => 1
+            [isOnline] => 1
+            [hidden] => 
+            [tempfull] => 
+            [type] => 4
+            [profile] => -1
+            [pause] => 0
+            [isPaused] => 
+            [isRecording] => 
+            [isManRec] => 
+            [ManRecElapsed] => 0
+            [ManRecLimit] => 0
+            [isYellow] => 
+            [isMotion] => 
+            [isTriggered] => 
+            [isNoSignal] => 
+            [isAlerting] => 
+            [nAlerts] => 0
+            [nTriggers] => 0
+            [nClips] => 0
+            [nNoSignal] => 13
+            [error] => 
+        )
 
-        $skipAutoCreation = array("mediaURL", "pictureURL");
+        camconfig Array
+        (
+            [pause] => 0
+            [push] => 
+            [audio] => 
+            [motion] => 
+            [schedule] => 
+            [ptzcycle] => 
+            [ptzevents] => 
+            [alerts] => 0
+            [output] => 
+            [setmotion] => Array
+                (
+                    [audio_trigger] => 
+                    [audio_sense] => 10000
+                    [usemask] => 1
+                    [sense] => 6500
+                    [contrast] => 40
+                    [showmotion] => 0
+                    [shadows] => 1
+                    [luminance] => 
+                    [objects] => 1
+                    [maketime] => 10
+                    [breaktime] => 100
+                )
 
-        //camera properties as variables
+            [record] => 2
+            [cmd] => camconfig
+            [optionValue] => Cam2
+        )*/
+
+        $cam = null;
+
+        if($in['cmd'] == "camlist") {
+            foreach($in as $key => $value) {
+                if(!is_array($value))
+                    continue;
+
+                if($value['optionValue'] == $this->GetCamID()) {
+                    $cam = $value;
+                    break;
+                }
+            }
+        }
+        else if($in['cmd'] == "camconfig") {
+            $cam = $in;
+        }
+
+        $variablesNeverCreate =     array(  "cmd",
+                                    );
+
+        $variablesCreateInMinimal = array(  "optionDisplay"
+                                            ,"optionValue"
+                                            ,"alertutc" 
+                                            ,"isEnabled"
+                                            ,"isMotion"
+                                            ,"isOnline"
+                                            ,"isPaused"
+                                            ,"isRecording"
+                                            ,"isTriggered"
+                                            ,"lastalert"
+                                    );
+
+        $variablesCreate = array();
+        if(IPS_GetProperty($this->InstanceID, "LoadCameraVariables") == "minimal") {
+            $variablesCreate = $variablesCreateInMinimal;
+        }
+
+        $userControlledProperties = array(
+                                            'isEnabled' => 'BLUEIRIS.Switch',
+                                            'isMotion' => 'BLUEIRIS.Switch',
+                                            'isPaused' => 'BLUEIRIS.Switch'
+                                    );
+
         foreach($cam as $key => $value) {
-            if(in_array($key, $skipAutoCreation))
+            if(is_array($value))
                 continue;
+
+            if(in_array($key, $variablesNeverCreate))
+                continue;
+
+            if(count($variablesCreate) > 0 && !in_array($key, $variablesCreate)) {
+                // delete possible existing variable
+                $var = @IPS_GetObjectIDByIdent($key, $this->InstanceID);
+                if($var) {
+                    IPS_DeleteVariable($var);
+                }
+                continue;
+            }
 
             $type = 3;
             switch (gettype($value)) {
@@ -187,7 +310,8 @@ class BlueIrisCamera extends IPSModule
                     $type = 3;
                     break;
             }
-            
+
+
             $var = @IPS_GetObjectIDByIdent($key, $this->InstanceID);
             if(!$var) {
                 $var = IPS_CreateVariable($type);
@@ -201,111 +325,117 @@ class BlueIrisCamera extends IPSModule
                 IPS_SetVariableCustomProfile($var, $userControlledProperties[$key]);
                 $this->EnableAction($key);
             } else {
-               @$this->DisableAction($key); 
+                @$this->DisableAction($key);
             }
 
-            if(GetValue($var) != $value) 
+            if(GetValue($var) != $value) {
+                if($key == "isMotion")
+                    continue;
+
                 SetValue($var, $value);
-        }
-
-        //additional control elements
-        if($cam["ptz"] == true) {
-            $ident = "controlptz";
-            $var = @IPS_GetObjectIDByIdent($ident, $this->InstanceID);
-            if(!$var) {
-                $var = IPS_CreateVariable(1);
-                IPS_SetIdent($var, $ident);
-                IPS_SetName($var, "PTZ Steuerung");
-                IPS_SetVariableCustomProfile($var, "BLUEIRIS.PTZ");   
-                IPS_SetParent($var, $this->InstanceID);
-                SetValue($var, 2);
             }
-            $this->EnableAction($ident);
-        }
-        else {
-            $ident = "ptz_".$cam["optionValue"];
-            $var = @IPS_GetObjectIDByIdent($ident, $this->InstanceID);
-            if($var) {
-                $this->DisableAction($ident);
-                IPS_DeleteVariable($var);
+
+            if($key == "motion") {
+                $var = IPS_GetObjectIDByIdent("isMotion", $this->InstanceID);
+                SetValue($var, $value);
             }
-        }
 
-        $var = @IPS_GetObjectIDByIdent("isMotionDetecting", $this->InstanceID);
-        if(!$var) {
-            $var = IPS_CreateVariable(0);
-            IPS_SetIdent($var, "isMotionDetecting");
-            IPS_SetName($var, "isMotionDetecting");
-            IPS_SetVariableCustomProfile($var, "BLUEIRIS.Switch");   
-            IPS_SetParent($var, $this->InstanceID);
-            SetValue($var, false);
-            $this->MotionDetection(false);
+            if($key == "isEnabled")
+                $this->HideControls($value);
         }
-        $this->EnableAction("isMotionDetecting");
+    }
 
+    private function UpdateMedia($param) {
         //media elements
         $media = @IPS_GetMediaIDByName("Kamera Stream", $this->InstanceID);
         if(!$media) {
             $media = IPS_CreateMedia(3);
             IPS_SetName($media, "Kamera Stream");
-            IPS_SetMediaFile($media, $cam['mediaURL'], true);
+            IPS_SetMediaFile($media, $param['mediaURL'], true);
             IPS_SetParent($media, $this->InstanceID);
         }
         else {
-            if(md5(IPS_GetMedia($media)['MediaFile']) != md5($cam['mediaURL'])) {
-                IPS_SetMediaFile($media, $cam['mediaURL'], true);
+            if(md5(IPS_GetMedia($media)['MediaFile']) != md5($param['mediaURL'])) {
+                IPS_SetMediaFile($media, $param['mediaURL'], true);
             }
         }
 
-        $media = @IPS_GetMediaIDByName("Kamera Standbild", $this->InstanceID);
-        if(!$media) {
-            $media = IPS_CreateMedia(3);
-            IPS_SetName($media, "Kamera Standbild");
-            IPS_SetMediaFile($media, $cam['pictureURL'], true);
-            IPS_SetParent($media, $this->InstanceID);
-        }
-        else {
-            if(md5(IPS_GetMedia($media)['MediaFile']) != md5($cam['pictureURL'])) {
-                IPS_SetMediaFile($media, $cam['pictureURL'], true);
-            }
-        }
+        // $media = @IPS_GetMediaIDByName("Kamera Standbild", $this->InstanceID);
+        // if(!$media) {
+        //     $media = IPS_CreateMedia(3);
+        //     IPS_SetName($media, "Kamera Standbild");
+        //     IPS_SetMediaFile($media, $param['pictureURL'], true);
+        //     IPS_SetParent($media, $this->InstanceID);
+        // }
+        // else {
+        //     if(md5(IPS_GetMedia($media)['MediaFile']) != md5($param['pictureURL'])) {
+        //         IPS_SetMediaFile($media, $param['pictureURL'], true);
+        //     }
+        // }
 
-        $pictureHTML = @IPS_GetObjectIDByIdent("pictureHTML", $this->InstanceID);
-        if(!$pictureHTML) {
-            $pictureHTML = IPS_CreateVariable(3);
-            IPS_SetIdent($pictureHTML, "pictureHTML");
-            IPS_SetName($pictureHTML, "pictureHTML");  
-            IPS_SetParent($pictureHTML, $this->InstanceID);
-            IPS_SetVariableCustomProfile($pictureHTML, "~HTMLBox");   
-        }
-        SetValue($pictureHTML, "<img src='".$cam['pictureURL']."'>");
+        // $pictureHTML = @IPS_GetObjectIDByIdent("pictureHTML", $this->InstanceID);
+        // if(!$pictureHTML) {
+        //     $pictureHTML = IPS_CreateVariable(3);
+        //     IPS_SetIdent($pictureHTML, "pictureHTML");
+        //     IPS_SetName($pictureHTML, "pictureHTML");  
+        //     IPS_SetParent($pictureHTML, $this->InstanceID);
+        //     IPS_SetVariableCustomProfile($pictureHTML, "~HTMLBox");   
+        // }
+        // SetValue($pictureHTML, "<img src='".$param['pictureURL']."'>");
+    }
 
-        // hide/unhide variables upon enabled state
+
+    private function UpdateCheck($interval) {
+        // Create Update script
+        $updateScriptID = @$this->GetIDForIdent("update");
+        if($updateScriptID === false) {
+            $updateScriptID = $this->RegisterScript("update", "update", file_get_contents(__DIR__ . "/update.php"), 100);
+        } else {
+            IPS_SetScriptContent($updateScriptID, file_get_contents(__DIR__ . "/update.php"));
+        }
+        IPS_SetHidden($updateScriptID, true);
+
+        $updateCheck = @IPS_GetEventIDByName("updatecheck", $updateScriptID);
+        if(!$updateCheck) {
+            $updateCheck = IPS_CreateEvent(1);
+            IPS_SetParent($updateCheck, $updateScriptID);
+            IPS_SetName($updateCheck, "updatecheck");
+        }
+        IPS_SetEventCyclic($updateCheck, 0, 0, 0, 2, 1, $interval);
+        if($interval > 0)
+            IPS_SetEventActive($updateCheck, true);
+        else
+            IPS_SetEventActive($updateCheck, false);
+    }
+
+    private function HideControls($boolean) {
         foreach(IPS_GetChildrenIDs($this->InstanceID) as $childID) {
             $Child = IPS_GetObject($childID);
 
+            $hide = false;
+            if($boolean == false)
+                $hide = true;
+
             if($Child['ObjectIdent'] != 'isEnabled') {
-                if($cam['isEnabled'] == false)
-                    IPS_SetHidden($childID, true);
-                else
-                    IPS_SetHidden($childID, false);
+                if($Child['ObjectIsHidden'] != $hide)
+                    IPS_SetHidden($childID, $hide);
             }
         }
     }
 
+    private function GetCamID() {
+        return IPS_GetProperty($this->InstanceID, "CamID");
+    }
+
     private function QueryParent(array $param) {
-        if(GetValue(IPS_GetObjectIDByIdent("isEnabled", $this->InstanceID)) == true || ($param['cmd'] == "camconfig" && isset($param['enable']))) {
-            if(!array_key_exists('camera', $param))
-                $param['camera'] = $this->GetCamID();
+        if(!array_key_exists('camera', $param))
+            $param['camera'] = $this->GetCamID();
 
-            $message = array();
-            $message['DataID'] = "{0AD5DC4B-6CE8-4979-8064-33B7895D6ACA}";
-            $message['Buffer'] = $param;
+        $message = array();
+        $message['DataID'] = "{0AD5DC4B-6CE8-4979-8064-33B7895D6ACA}";
+        $message['Buffer'] = $param;
 
-            // IPS_LogMessage("BlueIrisCamera", print_r($message, true));
-
-            $this->SendDataToParent(json_encode($message));
-        }
+        $this->SendDataToParent(json_encode($message));
     }
 
     

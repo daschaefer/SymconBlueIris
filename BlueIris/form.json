@@ -3,13 +3,17 @@
 	[
                 { "type": "ValidationTextBox",  "name": "IPAddress",            "caption": "Host" },
                 { "type": "NumberSpinner",      "name": "Port",                 "caption": "Port" },
-                { "type": "NumberSpinner",      "name": "Timeout",              "caption": "Timeout"},
-                { "type": "IntervalBox",        "name": "Interval",             "caption": "Sekunden" },
-                { "type": "ValidationTextBox",  "name": "Username",             "caption": "Username" },
-                { "type": "PasswordTextBox",    "name": "Password",             "caption": "Password"},
-                { "type": "Select",             "name": "TriggerVariable",      "caption": "Alarmauslöser:",  "options": [
+                { "type": "ValidationTextBox",  "name": "Username",             "caption": "Benutzername" },
+                { "type": "PasswordTextBox",    "name": "Password",             "caption": "Passwort"},
+                { "type": "NumberSpinner",      "name": "Timeout",              "caption": "Request Timeout",           "suffix": "Sekunden"},
+                { "type": "NumberSpinner",      "name": "Interval",             "caption": "Update Intervall",         "suffix": "Sekunden" },
+                { "type": "Select",             "name": "TriggerVariable",      "caption": "Alarmauslöser:",    "options": [
                         { "label": "isTriggered", "value": "isTriggered"},
                         { "label": "isAlerting", "value": "isAlerting"}
                 ]}
-	]
+        ],
+        "actions":
+        [
+                { "type": "Button", "label": "Kameras laden", "onClick": "BLUEIRIS_Update($id);" }
+        ]
 }

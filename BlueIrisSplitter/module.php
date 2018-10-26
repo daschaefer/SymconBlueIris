@@ -31,7 +31,7 @@ class BlueIrisSplitter extends IPSModule
             if($data->DataID != "{01AABE59-055A-4B4E-BCE0-C7B1217FF29C}") 
                 $this->SendDataToChildren($JSONString);
         } else {
-            $this->ModuleLogMessage("Unbekannter Verbindungsfehler - Häufige Ursachen: Username oder Passwort falsch, IP-Adresse wurde wegen Falschanmeldung gesperrt.");
+            $this->ModuleLogMessage("Unbekannter Verbindungsfehler - HÃ¤ufige Ursachen: Username oder Passwort falsch, IP-Adresse wurde wegen Falschanmeldung gesperrt.");
         }
 
         //Normally we would wait here for ReceiveData getting called asynchronically and buffer some data
