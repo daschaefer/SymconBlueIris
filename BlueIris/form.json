@@ -1,19 +1,21 @@
 {
 	"elements":
 	[
-                { "type": "ValidationTextBox",  "name": "IPAddress",            "caption": "Host" },
-                { "type": "NumberSpinner",      "name": "Port",                 "caption": "Port" },
-                { "type": "ValidationTextBox",  "name": "Username",             "caption": "Benutzername" },
-                { "type": "PasswordTextBox",    "name": "Password",             "caption": "Passwort"},
-                { "type": "NumberSpinner",      "name": "Timeout",              "caption": "Request Timeout",           "suffix": "Sekunden"},
-                { "type": "NumberSpinner",      "name": "Interval",             "caption": "Update Intervall",         "suffix": "Sekunden" },
-                { "type": "Select",             "name": "TriggerVariable",      "caption": "Alarmauslöser:",    "options": [
-                        { "label": "isTriggered", "value": "isTriggered"},
-                        { "label": "isAlerting", "value": "isAlerting"}
-                ]}
+                { "type": "Label", "label": "Modulkonfiguration" },
+                { "name": "IPAddress",                  "type": "ValidationTextBox",    "caption": "Host" },
+                { "name": "Port",                       "type": "NumberSpinner",        "caption": "Port" },
+                { "name": "Username",                   "type": "ValidationTextBox",    "caption": "Benutzername" },
+                { "name": "Password",                   "type": "PasswordTextBox",      "caption": "Passwort"},
+                { "name": "LoadCameraVariables",        "type": "Select",               "caption": "Kameravariablen:",  "options": [
+                        { "label": "Minimal",           "value": "minimal"},
+                        { "label": "Vollständig",       "value": "full"}
+                ]},
+                { "type": "Label", "label": "Webhook Einstellungen" },
+		{ "name": "HookUsername",		"type": "ValidationTextBox",    "caption": "Webhook Benutzername" },
+		{ "name": "HookPassword",		"type": "ValidationTextBox",    "caption": "Webhook Passwort" }
         ],
         "actions":
         [
-                { "type": "Button", "label": "Kameras laden", "onClick": "BLUEIRIS_Update($id);" }
+                { "type": "Button", "label": "Kamerainformationen laden", "onClick": "BLUEIRIS_Update($id);" }
         ]
 }

@@ -5,15 +5,17 @@ class BlueIris extends IPSModule
     public function Create()
     {
         parent::Create();
-        
+
         // Public properties
         $this->RegisterPropertyString("IPAddress", "");
         $this->RegisterPropertyInteger("Port", 81);
-        $this->RegisterPropertyInteger("Timeout", 3);
-        $this->RegisterPropertyInteger("Interval", 5);
         $this->RegisterPropertyString("Username", "admin");
         $this->RegisterPropertyString("Password", "");
-        $this->RegisterPropertyString("TriggerVariable", "isTriggered");
+        $this->RegisterPropertyString("LoadCameraVariables", "minimal");
+        $this->RegisterPropertyString("HookUsername", "blueiris");
+		$this->RegisterPropertyString("HookPassword", $this->GeneratePassphrase(18));
+        $this->RegisterPropertyString('MQTTTopic', 'SymconBlueIris');
+        $this->RegisterPropertyInteger('ControllerScriptID', -1);
     }
     
     public function ApplyChanges()
@@ -22,16 +24,7 @@ class BlueIris extends IPSModule
 
         parent::ApplyChanges();
 
-        $this->ConnectParent("{695BAF6A-A6CB-4989-9659-1C55B81FD458}");
-
-        // do not allow update interval lower than intervalLimit
-        $interval = IPS_GetProperty($this->InstanceID, "Interval");
-        if($interval > 0  && $interval < $intervalLimit) {
-            IPS_SetProperty($this->InstanceID, "Interval", $intervalLimit);
-            IPS_ApplyChanges($this->InstanceID);
-        }
-
-        // Create variable profiles
+        // // Create variable profiles
         $this->RegisterProfileBooleanEx("BLUEIRIS.AlarmState", "", "", "", Array(
                                                                                 Array(false, "Deaktiviert", "", -1),
                                                                                 Array(true, "Aktiviert", "", 0x00FF00)
@@ -111,28 +104,50 @@ class BlueIris extends IPSModule
             IPS_SetParent($var, $this->InstanceID);
         }        
 
+        // Create additional scripts
+        $ScriptID = @$this->GetIDForIdent("controller");
+        if($ScriptID === false) {
+            $ScriptID = $this->RegisterScript("controller", "controller", file_get_contents(__DIR__ . "/controller.php"), 100);
+        } else {
+            IPS_SetScriptContent($ScriptID, file_get_contents(__DIR__ . "/controller.php"));
+        }
+        IPS_SetHidden($ScriptID, true);
+        IPS_SetProperty($this->InstanceID, "ControllerScriptID", $ScriptID);
+
+        // register hook
+        $this->RegisterHook("/hook/blueiris");
+
+        // cyclic events
+        $ScriptID = @$this->GetIDForIdent("update");
+        if($ScriptID === false) {
+            $ScriptID = $this->RegisterScript("update", "update", file_get_contents(__DIR__ . "/update.php"), 100);
+        } else {
+            IPS_SetScriptContent($ScriptID, file_get_contents(__DIR__ . "/update.php"));
+        }
+        IPS_SetHidden($ScriptID, true);
+        $updateCheck = @IPS_GetEventIDByName("Update", $ScriptID);
+        if(!$updateCheck) {
+            $updateCheck = IPS_CreateEvent(1);
+            IPS_SetParent($updateCheck, $ScriptID);
+            IPS_SetName($updateCheck, "Update");
+            IPS_SetEventCyclic($updateCheck, 0, 0, 0, 2, 2, 1);
+            IPS_SetEventActive($updateCheck, true);
+        }
+
         $this->Update();
+    }
+
+    public function Update() {
+        $this->UpdateCameraList();
     }
 
     public function RequestAction($Ident, $Value) 
     { 
-        if(strlen(trim(IPS_GetProperty($this->InstanceID, "Username"))) == 0 || strlen(trim(IPS_GetProperty($this->InstanceID, "Password"))) == 0) 
-        {
-            $this->ModuleLogMessage("Fehler: Benutzername oder Passwort nicht gesetzt!");
-            return false;
-        }
-
-        $camid = null;
-        if(stripos($Ident, "_") !== false) {
-            $ex = explode("-", $Ident);
-            $Ident = $ex[0];
-            $camid = $ex[1];
-        }
-
         switch ($Ident) 
         { 
-            case "controlptz":
-                $this->PTZ($camid, $Value);
+            case "Alarm":
+                if($Value == 1000) // do reset
+                    $this->ResetAlarm();
                 break;
             case "AlarmState":
                 if($Value == true)
@@ -140,135 +155,271 @@ class BlueIris extends IPSModule
                 else
                     $this->DisableAlarm();
                 break;
-            case "Alarm":
-                if($Value == 1000)
-                    $this->ResetAlarm();
             default:
                 break;
         } 
     }
 
-    public function ReceiveData($JSONString) {
-        $data = json_decode($JSONString, true);
-        if(isset($data['DataID'])) {
-            if($data['DataID'] == "{0AD5DC4B-6CE8-4979-8064-33B7895D6ACA}") {
-                $buffer = $data['Buffer'];
+    public function EnableCamera(string $cameraID) {
+        $cameraCategory = IPS_GetObjectIDByIdent($cameraID, $this->InstanceID);
 
-                if($buffer['cmd'] == '_getMedia') {
-                    $result = $this->GetMedia($buffer['camera']);
+        $this->Query(array("cmd" => "camconfig", "camera" => $cameraID, "enable" => true));
 
-                    $message = null;
-                    $message = $result;
-                    $message['cmd'] = $buffer['cmd'];
-                    $message['optionValue'] = $buffer['camera'];
-
-                    $this->SendToBlueIrisCamera($message); // return data to camera instance
-                }
-                else {
-                    $result = json_decode($this->Query($buffer), true);
-                    if($result != null && $result['result'] == "success") {
-                        $message = null;
-                        $message = $result['data'];
-                        $message['cmd'] = $buffer['cmd'];
-                        $message['optionValue'] = $buffer['camera'];
-                        $this->SendToBlueIrisCamera($message); // return data to camera instance
-                    }
-                }
-            }
-        }
+        sleep(5);
+        $this->Update();
     }
 
-    public function GetMedia($optionValue) {
-        $cam['mediaURL'] = $this->BuildMediaURL($optionValue);
-        $cam['pictureURL'] = $this->BuildPictureURL($optionValue);
+    public function DisableCamera(string $cameraID) {
+        $cameraCategory = IPS_GetObjectIDByIdent($cameraID, $this->InstanceID);
 
-        return $cam;
+        $this->Query(array("cmd" => "camconfig", "camera" => $cameraID, "enable" => false));
+
+        sleep(5);
+        $this->Update();
     }
 
-    public function GetAlertList($time=0) {
-        $param = array();
-        $param['cmd'] = 'alertlist';
-        $param['camera'] = 'index';
-        $param['startdate'] = $time;
+    public function EnableMotionDetection(string $cameraID) {
+        $cameraCategory = IPS_GetObjectIDByIdent($cameraID, $this->InstanceID);
 
-        $result = json_decode($this->Query($param), true);
+        $this->Query(array("cmd" => "camconfig", "camera" => $cameraID, "motion" => true));
 
-        return $result;
-    }   
-
-    public function GetClipList($time=0) {
-        $param = array();
-        $param['cmd'] = 'cliplist';
-        $param['camera'] = 'index';
-        $param['startdate'] = $time;
-        $param['enddate'] = time();
-        $param['tiles'] = false;
-
-        $result = json_decode($this->Query($param), true);
-
-        return $result;
-    } 
-
-    public function GetCamList() {
-        $result = $this->Query(array("cmd" => "camlist"));
-
-        return $result;
+        sleep(2);
+        $this->Update();
     }
 
-    public function Update() {
-        $this->UpdateCameraList();
+    public function DisableMotionDetection(string $cameraID) {
+        $cameraCategory = IPS_GetObjectIDByIdent($cameraID, $this->InstanceID);
+
+        $this->Query(array("cmd" => "camconfig", "camera" => $cameraID, "motion" => false));
+
+        sleep(2);
+        $this->Update();
     }
 
-    public function UpdateCameraList() {
+    protected function UpdateCameraList() {
         if(strlen($this->ReadPropertyString("IPAddress")) > 0 && strlen($this->ReadPropertyInteger("Port")) > 0 && strlen(IPS_GetProperty($this->InstanceID, "Username")) > 0) {
             $result = json_decode($this->GetCamList(), true);
-
-            $message = array();
-            $message['Buffer'] = array();
 
             if($result != null) {
                 foreach($result["data"] as $cam) {
                     if($cam["optionValue"] == "index" || $cam["optionValue"] == "@index" || $cam["optionValue"] == "Index" || $cam["optionValue"] == "@Index")
                         continue;
 
-                    $cameraInstance = @IPS_GetInstanceIDByName("Kamera: ".$cam["optionDisplay"], $this->InstanceID);
-                    if(!$cameraInstance) {
-                        $cameraInstance = IPS_CreateInstance("{4AA1CD94-BA5B-4484-B377-B9F6FBFD22D3}");
-                        IPS_SetName($cameraInstance, "Kamera: ".$cam["optionDisplay"]);
-                        IPS_SetIdent($cameraInstance, $cam["optionValue"]);
-                        IPS_SetParent($cameraInstance, $this->InstanceID);
+                    $cameraCategory = @IPS_GetObjectIDByIdent($cam["optionValue"], $this->InstanceID);
+                    if(!$cameraCategory) {
+                        $cameraCategory = IPS_CreateCategory();
+                        IPS_SetName($cameraCategory, "Kamera: ".$cam["optionDisplay"]);
+                        IPS_SetIdent($cameraCategory, $cam["optionValue"]);
+                        IPS_SetParent($cameraCategory, $this->InstanceID);
                     } else {
-                        IPS_SetHidden($cameraInstance, false);
+                        IPS_SetHidden($cameraCategory, false);
                     }
 
-                    if(IPS_GetProperty($cameraInstance, "CamID") != $cam["optionValue"]) {
-                        IPS_SetProperty($cameraInstance, "CamID", $cam["optionValue"]);
-                        IPS_ApplyChanges($cameraInstance);    
+                    //media elements
+                    $mediaData = $this->GetMedia($cam["optionValue"]);
+                    $media = @IPS_GetMediaIDByName("Kamera Stream", $cameraCategory);
+                    if(!$media) {
+                        $media = IPS_CreateMedia(3);
+                        IPS_SetName($media, "Kamera Stream");
+                        IPS_SetMediaFile($media, $mediaData['mediaURL'], true);
+                        IPS_SetParent($media, $cameraCategory);
+                    }
+                    else {
+                        if(md5(IPS_GetMedia($media)['MediaFile']) != md5($mediaData['mediaURL'])) {
+                            IPS_SetMediaFile($media, $mediaData['mediaURL'], true);
+                        }
                     }
 
-                    // send refresh update info to camera instance
-                    $this->SendToBlueIrisCamera(array(
-                                                        'cmd' => 'UpdateCheck', 
-                                                        'optionValue' => $cam['optionValue'],
-                                                        'interval' => IPS_GetProperty($this->InstanceID, "Interval")
-                                                    ));
+                    //variables
+                    $this->UpdateCameraVariables($cam, $cameraCategory);
+
+                    $cameraConfig = json_decode($this->GetCamConfig($cam['optionValue']), true);
+                    $this->UpdateCameraVariables($cameraConfig['data'], $cameraCategory);
                 }
             }
         }
     }
 
-    public function Query(array $param) {
-        $result = null;
-
-        $session = $this->Connect();
-        if($session != null) {
-            $param['session'] = $session;
-            $result = $this->SendToBlueIrisServer($param);
-
-            $this->Disconnect($session);
-        }
+    private function GetCamList() {
+        /*
+        camlist Array
+        (
+            [optionDisplay] => Haustuer
+            [optionValue] => Cam1
+            [active] => 1
+            [FPS] => 6.28
+            [color] => 8151097
+            [ptz] => 
+            [audio] => 
+            [width] => 1920
+            [height] => 1080
+            [newalerts] => 0
+            [lastalert] => -1
+            [alertutc] => 1527526323
+            [webcast] => 1
+            [isEnabled] => 1
+            [isOnline] => 1
+            [hidden] => 
+            [tempfull] => 
+            [type] => 4
+            [profile] => -1
+            [pause] => 0
+            [isPaused] => 
+            [isRecording] => 
+            [isManRec] => 
+            [ManRecElapsed] => 0
+            [ManRecLimit] => 0
+            [isYellow] => 
+            [isMotion] => 
+            [isTriggered] => 
+            [isNoSignal] => 
+            [isAlerting] => 
+            [nAlerts] => 0
+            [nTriggers] => 0
+            [nClips] => 0
+            [nNoSignal] => 13
+            [error] => 
+        )
+        */
+        $result = $this->Query(array("cmd" => "camlist"));
 
         return $result;
+    }
+
+    private function GetCamConfig($cameraID) {
+        /*
+        camconfig Array
+        (
+            [pause] => 0
+            [push] => 
+            [audio] => 
+            [motion] => 
+            [schedule] => 
+            [ptzcycle] => 
+            [ptzevents] => 
+            [alerts] => 0
+            [output] => 
+            [setmotion] => Array
+                (
+                    [audio_trigger] => 
+                    [audio_sense] => 10000
+                    [usemask] => 1
+                    [sense] => 6500
+                    [contrast] => 40
+                    [showmotion] => 0
+                    [shadows] => 1
+                    [luminance] => 
+                    [objects] => 1
+                    [maketime] => 10
+                    [breaktime] => 100
+                )
+
+            [record] => 2
+            [cmd] => camconfig
+            [optionValue] => Cam2
+        )*/
+        $result = $this->Query(array("camera" =>$cameraID, "cmd" => "camconfig"));
+
+        return $result;
+    }
+
+    private function UpdateCameraVariables($cameraData, $cameraCategory) {
+        $cameraIdent = IPS_GetObject($cameraCategory)['ObjectIdent'];
+
+        $variablesCreateInMinimal = array(  "optionDisplay"
+                                            ,"optionValue"
+                                            ,"alertutc" 
+                                            ,"isEnabled"
+                                            ,"motion"
+                                            ,"isOnline"
+                                            ,"isRecording"
+                                            ,"isTriggered"
+                                            ,"lastalert"
+                                    );
+
+        $variablesCreate = array();
+        if(IPS_GetProperty($this->InstanceID, "LoadCameraVariables") == "minimal") {
+            $variablesCreate = $variablesCreateInMinimal;
+        }
+
+        $userControlledProperties = array(
+                                            'isEnabled' => 'BLUEIRIS.Switch',
+                                            'motion' => 'BLUEIRIS.Switch',
+                                            'isPaused' => 'BLUEIRIS.Switch'
+                                    );
+
+        foreach($cameraData as $key => $value) {
+            if(is_array($value))
+                continue;
+
+            if(count($variablesCreate) > 0 && !in_array($key, $variablesCreate)) {
+                // delete possible existing variable
+                $var = @IPS_GetObjectIDByIdent($key, $cameraCategory);
+                if($var) {
+                    IPS_DeleteVariable($var);
+                }
+                continue;
+            }        
+
+            $type = 3;
+            switch (gettype($value)) {
+                case 'boolean':
+                    $type = 0;
+                    break;
+                case 'integer':
+                    $type = 1;
+                    break;
+                case 'double':
+                    $type = 2;
+                    break;
+                default:
+                    $type = 3;
+                    break;
+            }
+
+            $var = @IPS_GetObjectIDByIdent($key."_".$cameraIdent, $cameraCategory);
+            if(!$var) {
+                $var = IPS_CreateVariable($type);
+                IPS_SetName($var, $key);
+                IPS_SetIdent($var, $key."_".$cameraIdent);
+
+                IPS_SetParent($var, $cameraCategory);
+            }
+
+            if(array_key_exists($key, $userControlledProperties) === true) {
+                IPS_SetVariableCustomProfile($var, $userControlledProperties[$key]);
+                IPS_SetVariableCustomAction($var, IPS_GetProperty($this->InstanceID, "ControllerScriptID"));
+            }
+
+            if(GetValue($var) != $value)
+                SetValue($var, $value);
+
+            if($key == "isEnabled")
+                 $this->HideControls($cameraCategory, $value);
+        }
+    }
+
+    private function HideControls($cameraCategory, $boolean) {
+        foreach(IPS_GetChildrenIDs($cameraCategory) as $childID) {
+            $Child = IPS_GetObject($childID);
+
+            $hide = false;
+            if($boolean == false)
+                $hide = true;
+
+            
+            if(!fnmatch('isEnabled*', $Child['ObjectIdent'])) {
+                if($Child['ObjectIsHidden'] != $hide)
+                    IPS_SetHidden($childID, $hide);
+            }
+        }
+    }
+
+    public function GetMedia($camID) {
+        $media['mediaURL'] = $this->BuildMediaURL($camID);
+        $media['pictureURL'] = $this->BuildPictureURL($camID);
+
+        return $media;
     }
 
     public function EnableAlarm() {
@@ -301,7 +452,179 @@ class BlueIris extends IPSModule
         SetValue(IPS_GetObjectIDByIdent("AlarmTrigger", $this->InstanceID), "");
     }
 
+    public function GetAlertList($time=0) {
+        $param = array();
+        $param['cmd'] = 'alertlist';
+        $param['camera'] = 'index';
+        $param['startdate'] = $time;
+
+        $result = json_decode($this->Query($param), true);
+
+        return $result;
+    }   
+
+    public function GetClipList($time=0) {
+        $param = array();
+        $param['cmd'] = 'cliplist';
+        $param['camera'] = 'index';
+        $param['startdate'] = $time;
+        $param['enddate'] = time();
+        $param['tiles'] = false;
+
+        $result = json_decode($this->Query($param), true);
+
+        return $result;
+    } 
+
+    public function GenerateNewHookPassword() {
+        $password = $this->GeneratePassphrase(18);
+        IPS_SetProperty($this->InstanceID, "HookPassword", $password);
+    }
+
+    public function ProcessHookData() {
+        // IPS_LogMessage("WebHook GET", print_r($_GET, true));
+
+        if($_IPS['SENDER'] == "Execute") {
+            echo "This script cannot be used this way.";
+            return;
+        } else {
+            $instanceID = $this->InstanceID;
+            if(isset($_GET['instanceid']) && $_GET['instanceid'] > 0) {
+                if(IPS_GetObject($_GET['instanceid'])['ObjectType'] == 1) {
+                    $instanceID = $_GET['instanceid'];
+                }
+            }
+
+            if((IPS_GetProperty($instanceID, "HookUsername") != "") || (IPS_GetProperty($instanceID, "HookPassword") != "")) {
+				if(!isset($_SERVER['PHP_AUTH_USER']))
+					$_SERVER['PHP_AUTH_USER'] = "";
+				if(!isset($_SERVER['PHP_AUTH_PW']))
+					$_SERVER['PHP_AUTH_PW'] = "";
+					
+				if(($_SERVER['PHP_AUTH_USER'] != IPS_GetProperty($instanceID, "HookUsername")) || ($_SERVER['PHP_AUTH_PW'] != IPS_GetProperty($instanceID, "HookPassword"))) {
+					header('WWW-Authenticate: Basic Realm="BlueIris WebHook"');
+					header('HTTP/1.0 401 Unauthorized');
+					echo "Authorization required";
+					return;
+				}
+			}
+            
+            if(isset($_GET)) {
+                if(isset($_GET['cam']) && isset($_GET['action'])) {
+                    if($_GET['action'] == "trigger") { // when cam is triggered by event
+                        $this->Update();
+
+                        $this->SetAlarm($_GET['cam']);
+                    }
+                }
+            }
+        }
+    }
+
+
+
     // PRIVATE FUNCTIONS
+
+    private function RegisterHook($WebHook) {
+        $ids = IPS_GetInstanceListByModuleID("{015A6EB8-D6E5-4B93-B496-0D3F77AE9FE1}");
+        if(sizeof($ids) > 0) {
+            $hooks = json_decode(IPS_GetProperty($ids[0], "Hooks"), true);
+            $found = false;
+            foreach($hooks as $index => $hook) {
+                if($hook['Hook'] == $WebHook) {
+                    if($hook['TargetID'] == $this->InstanceID)
+                        return;
+                    $hooks[$index]['TargetID'] = $this->InstanceID;
+                    $found = true;
+                }
+            }
+            if(!$found) {
+                $hooks[] = Array("Hook" => $WebHook, "TargetID" => $this->InstanceID);
+            }
+            IPS_SetProperty($ids[0], "Hooks", json_encode($hooks));
+            IPS_ApplyChanges($ids[0]);
+        }
+    }
+
+    private function Query(array $param) {
+        $result = null;
+
+        $session = $this->ConnectToBlueIrisServer();
+        if($session != null) {
+            $param['session'] = $session;
+            $result = $this->SendToBlueIrisServer($param);
+
+            $this->DisconnectFromBlueIrisServer($session);
+        }
+
+        return $result;
+    }
+
+    private function ConnectToBlueIrisServer() {
+        $session = null;
+
+        $result = $this->SendToBlueIrisServer(array("cmd" => "login"));
+        $result = json_decode($result, true);
+
+        if(isset($result["session"])) {
+            $response = md5(IPS_GetProperty($this->InstanceID, "Username").":".$result["session"].":".IPS_GetProperty($this->InstanceID, "Password"));
+
+            $result = $this->SendToBlueIrisServer(array("cmd" => "login", "session" => $result["session"], "response" => $response));
+            $result = json_decode($result, true);
+
+            if($result["result"] == "success")
+                $session = $result["session"];
+        }
+
+        return $session;
+    }
+
+    private function DisconnectFromBlueIrisServer($session) {
+        if(is_null($session)){
+            return false;
+        } 
+
+        $result = $this->SendToBlueIrisServer(array("cmd" => "logout", "session" => $session));
+
+        $output = json_decode($result, true);
+        if($output["result"] == "success") {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    private function SendToBlueIrisServer(array $param) {
+        $result = null;
+
+        $url = $this->BuildURL();
+
+        if($url != null) {
+            $ch = curl_init($url); 
+             
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");                                                                       
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); 
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 1);
+            if(count($param) > 0) {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($param));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, array(                                                                          
+                    'Content-Type: application/json',                                                                                
+                    'Content-Length: ' . strlen(json_encode($param)))                                                                       
+                );   
+            }
+            $result = curl_exec($ch);
+
+            if(curl_errno($ch))
+            {
+                if($ch == curl_errno($ch)) $this->SetStatus(204); else echo 'Curl error: ' . curl_error($ch);
+                return false;
+            }
+            curl_close($ch);
+        }
+        
+        return $result;
+    }
+
     private function BuildURL() {
         if(strlen($this->ReadPropertyString("IPAddress")) > 0 && strlen($this->ReadPropertyInteger("Port")) > 0)
             return 'http://'.$this->ReadPropertyString("IPAddress").':'.$this->ReadPropertyInteger("Port").'/json';
@@ -309,9 +632,9 @@ class BlueIris extends IPSModule
             return null;
     }
 
-    private function BuildMediaURL($camid) {
-        if(strlen($this->ReadPropertyString("IPAddress")) > 0 && strlen($this->ReadPropertyInteger("Port")) > 0 && strlen($camid) > 0) {
-            $return = 'http://'.$this->ReadPropertyString("IPAddress").':'.$this->ReadPropertyInteger("Port").'/mjpg/'.$camid.'/video.mjpg';
+    private function BuildMediaURL($camID) {
+        if(strlen($this->ReadPropertyString("IPAddress")) > 0 && strlen($this->ReadPropertyInteger("Port")) > 0 && strlen($camID) > 0) {
+            $return = 'http://'.$this->ReadPropertyString("IPAddress").':'.$this->ReadPropertyInteger("Port").'/mjpg/'.$camID.'/video.mjpg';
             
             if(strlen($this->ReadPropertyString("Username")) > 0 && strlen($this->ReadPropertyString("Password")) > 0)
                 $return .= '?user='.$this->ReadPropertyString("Username").'&pw='.$this->ReadPropertyString("Password");
@@ -322,9 +645,9 @@ class BlueIris extends IPSModule
             return null;
     }
 
-    private function BuildPictureURL($camid) {
-        if(strlen($this->ReadPropertyString("IPAddress")) > 0 && strlen($this->ReadPropertyInteger("Port")) > 0 && strlen($camid) > 0) {
-            $return = 'http://'.$this->ReadPropertyString("IPAddress").':'.$this->ReadPropertyInteger("Port").'/image/'.$camid.'?time=0&d='.time();
+    private function BuildPictureURL($camID) {
+        if(strlen($this->ReadPropertyString("IPAddress")) > 0 && strlen($this->ReadPropertyInteger("Port")) > 0 && strlen($camID) > 0) {
+            $return = 'http://'.$this->ReadPropertyString("IPAddress").':'.$this->ReadPropertyInteger("Port").'/image/'.$camID.'?time=0&d='.time();
             
             if(strlen($this->ReadPropertyString("Username")) > 0 && strlen($this->ReadPropertyString("Password")) > 0)
                 $return .= '&user='.$this->ReadPropertyString("Username").'&pw='.$this->ReadPropertyString("Password");
@@ -353,81 +676,6 @@ class BlueIris extends IPSModule
             return null;   
     }
 
-    private function SendToBlueIrisServer(array $param) {
-        $result = null;
-
-        $url = $this->BuildURL();
-
-        if($url != null) {
-            $ch = curl_init($url); 
-             
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");                                                                       
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); 
-            curl_setopt($ch,CURLOPT_CONNECTTIMEOUT, $this->ReadPropertyInteger("Timeout"));
-            if(count($param) > 0) {
-                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($param));
-                curl_setopt($ch, CURLOPT_HTTPHEADER, array(                                                                          
-                    'Content-Type: application/json',                                                                                
-                    'Content-Length: ' . strlen(json_encode($param)))                                                                       
-                );   
-            }
-            $result = curl_exec($ch);
-
-            if(curl_errno($ch))
-            {
-                if($ch == curl_errno($ch)) $this->SetStatus(204); else echo 'Curl error: ' . curl_error($ch);
-                return false;
-            }
-            curl_close($ch);
-        }
-        
-        return $result;
-    }
-
-    private function SendToBlueIrisCamera(array $param) {
-        $message['DataID'] = "{ED01C3C3-22CF-4F37-9FF4-9D366973853D}";
-        $message['Buffer'][] = $param;
-
-        try {
-            $this->SendDataToParent(json_encode($message));    
-        } catch (Exception $e) {
-        }
-    }
-
-    private function Connect() {
-        $session = null;
-
-        $result = $this->SendToBlueIrisServer(array("cmd" => "login"));
-        $result = json_decode($result, true);
-
-        if(isset($result["session"])) {
-            $response = md5(IPS_GetProperty($this->InstanceID, "Username").":".$result["session"].":".IPS_GetProperty($this->InstanceID, "Password"));
-
-            $result = $this->SendToBlueIrisServer(array("cmd" => "login", "session" => $result["session"], "response" => $response));
-            $result = json_decode($result, true);
-
-            if($result["result"] == "success")
-                $session = $result["session"];
-        }
-
-        return $session;
-    }
-
-    private function Disconnect($session) {
-        if(is_null($session)){
-            return false;
-        } 
-
-        $result = $this->SendToBlueIrisServer(array("cmd" => "logout", "session" => $session));
-
-        $output = json_decode($result, true);
-        if($output["result"] == "success") {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
     private function SetAlarm($cam) {
         $var = IPS_GetObjectIDByIdent("Alarm", $this->InstanceID);
 
@@ -443,7 +691,7 @@ class BlueIris extends IPSModule
                 $this->EnableAction("Alarm");
 
                 SetValue($var, 1);
-                SetValue(IPS_GetObjectIDByIdent("AlarmTrigger", $this->InstanceID), $cam['optionValue']); 
+                SetValue(IPS_GetObjectIDByIdent("AlarmTrigger", $this->InstanceID), $cam); 
 
                 $this->RenderAlarmList($cam);
             }
@@ -451,7 +699,11 @@ class BlueIris extends IPSModule
     }
 
     private function RenderAlarmList($cam) {
-        $html = "<img src='".$this->BuildClipURL($cam['lastalert'])."'>";
+        sleep(2);
+        $cameraCategory = IPS_GetObjectIDByIdent($cam, $this->InstanceID);
+        $lastAlert = IPS_GetObjectIDByIdent("lastalert_".$cam, $cameraCategory);
+
+        $html = "<img src='".$this->BuildClipURL(GetValue($lastAlert)."'>");
 
         $camID = GetValue(IPS_GetObjectIDByIdent("AlarmTrigger", $this->InstanceID));
         $cameraInstance = IPS_GetObjectIDByIdent($camID, $this->InstanceID);
@@ -461,6 +713,8 @@ class BlueIris extends IPSModule
 
         SetValue($htmlVar, $html);
     }
+    
+    
 
     // HELPER FUNCTIONS
     protected function RegisterProfileInteger($Name, $Icon, $Prefix, $Suffix, $MinValue, $MaxValue, $StepSize) {
@@ -530,6 +784,22 @@ class BlueIris extends IPSModule
     {
         $instance = IPS_GetInstance($this->InstanceID);
         return ($instance['ConnectionID'] > 0) ? $instance['ConnectionID'] : false;
+    }
+
+    protected function GeneratePassphrase($length) {
+        $passphrase = "";
+            $chars = array('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '!', '$', '#', '-', '_');
+            $charLastIndex = 0;
+            for($i=0; $i < $length; $i++) {
+               $randIndex = rand(0, (count($chars)-1));
+               while (abs($randIndex - $charLastIndex) < 10) {
+                   $randIndex = rand(0, (count($chars)-1));
+               }
+               $charLastIndex = $randIndex;
+               $passphrase .= $chars[$randIndex];
+            }
+        
+        return $passphrase;
     }
 
     protected function ModuleLogMessage($message) {

@@ -1,6 +1,6 @@
 BlueIris v2 Module für IP-Symcon
 ===
-Dieses IP-Symcon PHP Modul ermöglicht die Verwendung von Netzwerkkameras über BlueIris
+Dieses IP-Symcon PHP Modul ermöglicht die Verwendung von Netzwerkkameras über BlueIris.
 
 **Content**
 
@@ -16,6 +16,7 @@ Die folgenden Funktionalitäten sind implementiert:
 - Motion Detection aktivieren/deaktiviere
 - Kameraparameter wählbar: minimal/vollständig (minimal ist Standard da deutlich weniger Variablen verwendet werden)
 - Abfragen des Alarmbildes als ID
+- Entgegennehmen von Triggermeldungen welche von BlueIris an Symcon gesendet werden (per Webhook)
 
 ## 2. Anforderungen
 - IP-Symcon 5.x installation (Linux / Windows)
@@ -34,24 +35,40 @@ Danach ist es möglich eine neue BlueIris Instanz innerhalb des Objektbaumes von
 
 **Port:**
 
-*Der Port des BlueIris Servers (Standard: 81)
+*Der Port des BlueIris Servers (Standard: 81)*
 
-**Timeout:**
-
-*Maximale Laufzeit der CURL Requests in Sekunden (Standard: 3)*
-
-**Intervall:**
-
-*Aktualisierungsintervall der Variablen und Zustände der Kameras in Sekunden (Standard: 3). Der Wert 0 deaktiviert die Kommunikation zu BlueIris*
-
-**Username:**
+**Benutzername:**
 
 *Benutzername für den Zugriff auf den BlueIris Server*
 
-**Password:**
+**Passwort:**
 
 *Passwort für den Zugriff auf den BlueIris Server*
 
+**Kameravariablen:**
+
+*Minimal legt nur die wichtigsten Variablen an, Vollständig legt alle Variablen an die über die API übermittelt werden*
+
+**Webhook Benutzername:**
+
+*Benutzername für den Zugriff auf den Webhook des Moduls*
+
+**Webhook Passwort:**
+
+*Passwort für den Zugriff auf den Webhook des Moduls*
+
+### Konfiguration der Übermittlung eines Triggers an Symcon
+
+1. BlueIris Adminkonsole öffnen
+
+2. Die Eigenschaften der Kamera öffnen welche bei Bewegung einen Trigger senden soll.
+
+3. Dort dann den Reiter 'Alerts' öffnen. Den merkierten Punkt anhaken und auf den Knopf 'Configure...' klicken:
+    ![Kameraeigenschaften - Alerts](imgs/1.png?raw=true "Kameraeigenschaften - Alerts")
+
+4. Dort als Typ 'http://' auswählen und folgenden String eintragen (Benutzername / Passwort der Modulkonfiguration innerhalb Symcon entnehmen):
+  ![Aktionsgruppe](imgs/2.png?raw=true "Aktionsgruppe")
+  - Benutzername:Passwort@Symcon-IP-Adresse:3777/hook/blueiris?cam=&CAM&action=trigger
 
 ## 4. Funktionen
 

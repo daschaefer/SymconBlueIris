@@ -7,8 +7,8 @@
 	[
 		"BlueIris"
 	],
-	"parentRequirements": ["{01AABE59-055A-4B4E-BCE0-C7B1217FF29C}"],
+	"parentRequirements": [],
 	"childRequirements": [],
-	"implemented": ["{018EF6B5-AB94-40C6-AA53-46943E824ACF}", "{0AD5DC4B-6CE8-4979-8064-33B7895D6ACA}"],
+	"implemented": [],
 	"prefix": "BLUEIRIS"
 }
