@@ -406,9 +406,8 @@ class BlueIris extends IPSModule
             $hide = false;
             if($boolean == false)
                 $hide = true;
-
             
-            if(!fnmatch('isEnabled*', $Child['ObjectIdent'])) {
+            if(stristr($Child['ObjectIdent'], "isEnabled") === FALSE) {
                 if($Child['ObjectIsHidden'] != $hide)
                     IPS_SetHidden($childID, $hide);
             }
