@@ -263,7 +263,10 @@ class BlueIris extends IPSModule
                             IPS_SetParent($grabber, $cameraCategory);
 
                             IPS_SetProperty($grabber, 'ImageType', 1);
-                            IPS_SetProperty($grabber, 'ImageAddress', $mediaData['pictureURL']);
+                            IPS_SetProperty($grabber, 'AuthUser', IPS_GetProperty($this->InstanceID, "Username"));
+                            IPS_SetProperty($grabber, 'AuthPass', IPS_GetProperty($this->InstanceID, "Password"));
+                            IPS_SetProperty($grabber, 'UseBasicAuth', true);
+                            IPS_SetProperty($grabber, 'ImageAddress', $mediaData['cleanPictureURL']);
                             IPS_SetProperty($grabber, 'Interval', $this->ReadPropertyInteger("IG_RefreshInterval"));
                             IPS_ApplyChanges($grabber);
 
@@ -474,6 +477,7 @@ class BlueIris extends IPSModule
     public function GetMedia($camID) {
         $media['mediaURL'] = $this->BuildMediaURL($camID);
         $media['pictureURL'] = $this->BuildPictureURL($camID);
+        $media['cleanPictureURL'] = $this->BuildCleanPictureURL($camID);
 
         return $media;
     }
@@ -707,6 +711,16 @@ class BlueIris extends IPSModule
             
             if(strlen($this->ReadPropertyString("Username")) > 0 && strlen($this->ReadPropertyString("Password")) > 0)
                 $return .= '&user='.$this->ReadPropertyString("Username").'&pw='.$this->ReadPropertyString("Password");
+
+            return $return;
+        }
+        else
+            return null;
+    }
+
+    private function BuildCleanPictureURL($camID) {
+        if(strlen($this->ReadPropertyString("IPAddress")) > 0 && strlen($this->ReadPropertyInteger("Port")) > 0 && strlen($camID) > 0) {
+            $return = 'http://'.$this->ReadPropertyString("IPAddress").':'.$this->ReadPropertyInteger("Port").'/image/'.$camID.'?time=0&d='.time();
 
             return $return;
         }
