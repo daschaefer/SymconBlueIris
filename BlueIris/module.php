@@ -16,6 +16,8 @@ class BlueIris extends IPSModule
 		$this->RegisterPropertyString("HookPassword", $this->GeneratePassphrase(18));
         $this->RegisterPropertyString('MQTTTopic', 'SymconBlueIris');
         $this->RegisterPropertyInteger('ControllerScriptID', -1);
+        $this->RegisterPropertyBoolean('IG_Enabled', false);
+        $this->RegisterPropertyInteger('IG_RefreshInterval', 10);
     }
     
     public function ApplyChanges()
@@ -196,6 +198,26 @@ class BlueIris extends IPSModule
         $this->Update();
     }
 
+    public function PTZ(string $cameraID, int $ptz_command) {
+        /*
+            0: Pan left
+            1: Pan right
+            2: Tilt up
+            3: Tilt down
+            4: Center or home (if supported by camera)
+            5: Zoom in
+            6: Zoom out
+            8..10: Power mode, 50, 60, or outdoor
+            11..26: Brightness 0-15
+            27..33: Contrast 0-6
+            34..35: IR on, off
+            101..120: Go to preset position 1..20
+        */
+
+        $result = $this->Query(array("cmd" => "ptz", "camera" => $cameraID, "button" => $ptz_command, "updown" => 1));
+        $result = $this->Query(array("cmd" => "ptz", "camera" => $cameraID, "button" => $ptz_command, "updown" => 1));
+    }
+
     protected function UpdateCameraList() {
         if(strlen($this->ReadPropertyString("IPAddress")) > 0 && strlen($this->ReadPropertyInteger("Port")) > 0 && strlen(IPS_GetProperty($this->InstanceID, "Username")) > 0) {
             $result = json_decode($this->GetCamList(), true);
@@ -229,6 +251,41 @@ class BlueIris extends IPSModule
                             IPS_SetMediaFile($media, $mediaData['mediaURL'], true);
                         }
                     }
+
+                    //image grabber
+                    if($this->ReadPropertyBoolean("IG_Enabled") == true) {
+                        $grabber = @IPS_GetObjectIDByIdent("ImageGrabber", $cameraCategory);
+                        if(!$grabber) {
+                            $grabber = IPS_CreateInstance("{5A5D5DBD-53AB-4826-8B09-71E9E4E981E5}");
+                            IPS_SetName($grabber, "Kamera ImageGrab");
+                            IPS_SetIdent($grabber, "ImageGrabber");
+                            IPS_SetIcon($grabber, "Image");
+                            IPS_SetParent($grabber, $cameraCategory);
+
+                            IPS_SetProperty($grabber, 'ImageType', 1);
+                            IPS_SetProperty($grabber, 'ImageAddress', $mediaData['pictureURL']);
+                            IPS_SetProperty($grabber, 'Interval', $this->ReadPropertyInteger("IG_RefreshInterval"));
+                            IPS_ApplyChanges($grabber);
+
+                            IG_UpdateImage($grabber);
+                        } else {
+                            if($this->ReadPropertyInteger("IG_RefreshInterval") != IPS_GetProperty($grabber, 'Interval')) {
+                                IPS_SetProperty($grabber, 'Interval', $this->ReadPropertyInteger("IG_RefreshInterval"));
+                                IPS_ApplyChanges($grabber);
+                            }
+                        }
+                    }
+                    else {
+                        $grabber = @IPS_GetObjectIDByIdent("ImageGrabber", $cameraCategory);
+                        if($grabber) {
+                            $children = IPS_GetChildrenIDs($grabber);
+                            foreach($children as $child) {
+                                IPS_DeleteMedia($child, true);
+                            }
+                            IPS_DeleteInstance($grabber);
+                        }
+                    }
+                    
 
                     //variables
                     $this->UpdateCameraVariables($cam, $cameraCategory);

@@ -2,17 +2,30 @@
 	"elements":
 	[
                 { "type": "Label", "label": "Modulkonfiguration" },
-                { "name": "IPAddress",                  "type": "ValidationTextBox",    "caption": "Host" },
-                { "name": "Port",                       "type": "NumberSpinner",        "caption": "Port" },
-                { "name": "Username",                   "type": "ValidationTextBox",    "caption": "Benutzername" },
-                { "name": "Password",                   "type": "PasswordTextBox",      "caption": "Passwort"},
+                { "name": "IPAddress",                  "type": "ValidationTextBox",    "caption": "Host:" },
+                { "name": "Port",                       "type": "NumberSpinner",        "caption": "Port:" },
+                { "name": "Username",                   "type": "ValidationTextBox",    "caption": "Benutzername:" },
+                { "name": "Password",                   "type": "PasswordTextBox",      "caption": "Passwort:"},
                 { "name": "LoadCameraVariables",        "type": "Select",               "caption": "Kameravariablen:",  "options": [
                         { "label": "Minimal",           "value": "minimal"},
                         { "label": "Vollständig",       "value": "full"}
                 ]},
-                { "type": "Label", "label": "Webhook Einstellungen" },
-		{ "name": "HookUsername",		"type": "ValidationTextBox",    "caption": "Webhook Benutzername" },
-		{ "name": "HookPassword",		"type": "ValidationTextBox",    "caption": "Webhook Passwort" }
+                {
+                        "type": "ExpansionPanel",
+                        "caption": "Image Grabber Einstellungen",
+                        "items": [
+                                { "name": "IG_Enabled",                 "type": "CheckBox",             "caption": "Image Grabber verwenden:" },
+                                { "name": "IG_RefreshInterval",         "type": "NumberSpinner",        "caption": "Aktualisierungsintervall:" }
+                        ]
+                },
+                {
+                        "type": "ExpansionPanel",
+                        "caption": "Webhook Einstellungen",
+                        "items": [
+                                { "name": "HookUsername",		"type": "ValidationTextBox",    "caption": "Webhook Benutzername:" },
+		                { "name": "HookPassword",		"type": "ValidationTextBox",    "caption": "Webhook Passwort:" }
+                        ]
+                }
         ],
         "actions":
         [

@@ -1,6 +1,6 @@
 BlueIris v2 Module für IP-Symcon
 ===
-Dieses IP-Symcon PHP Modul ermöglicht die Verwendung von Netzwerkkameras über BlueIris.
+Dieses IP-Symcon PHP Modul ermöglicht die Verwendung von Netzwerkkameras über BlueIris
 
 **Content**
 
@@ -16,7 +16,6 @@ Die folgenden Funktionalitäten sind implementiert:
 - Motion Detection aktivieren/deaktiviere
 - Kameraparameter wählbar: minimal/vollständig (minimal ist Standard da deutlich weniger Variablen verwendet werden)
 - Abfragen des Alarmbildes als ID
-- Entgegennehmen von Triggermeldungen welche von BlueIris an Symcon gesendet werden (per Webhook)
 
 ## 2. Anforderungen
 - IP-Symcon 5.x installation (Linux / Windows)
@@ -49,6 +48,14 @@ Danach ist es möglich eine neue BlueIris Instanz innerhalb des Objektbaumes von
 
 *Minimal legt nur die wichtigsten Variablen an, Vollständig legt alle Variablen an die über die API übermittelt werden*
 
+**Image Grabber verwenden:**
+
+*Kamerabild über Image Grabber holen, dies ermöglicht die Verwendung von Symcon Connect*
+
+**Aktualisierungsintervall:**
+
+*Aktualisierungsintervall für den Image Grabber in Sekunden (default 10s)*
+
 **Webhook Benutzername:**
 
 *Benutzername für den Zugriff auf den Webhook des Moduls*
@@ -64,10 +71,12 @@ Danach ist es möglich eine neue BlueIris Instanz innerhalb des Objektbaumes von
 2. Die Eigenschaften der Kamera öffnen welche bei Bewegung einen Trigger senden soll.
 
 3. Dort dann den Reiter 'Alerts' öffnen. Den merkierten Punkt anhaken und auf den Knopf 'Configure...' klicken:
-    ![Kameraeigenschaften - Alerts](imgs/1.png?raw=true "Kameraeigenschaften - Alerts")
+
+![Kameraeigenschaften - Alerts](imgs/1.png?raw=true "Kameraeigenschaften - Alerts")
 
 4. Dort als Typ 'http://' auswählen und folgenden String eintragen (Benutzername / Passwort der Modulkonfiguration innerhalb Symcon entnehmen):
-  ![Aktionsgruppe](imgs/2.png?raw=true "Aktionsgruppe")
+
+![Aktionsgruppe](imgs/2.png?raw=true "Aktionsgruppe")
   - Benutzername:Passwort@Symcon-IP-Adresse:3777/hook/blueiris?cam=&CAM&action=trigger
 
 ## 4. Funktionen
@@ -145,9 +154,34 @@ Pausiert die Kamera
 
 ---
 ```php
-BLUEIRISCAMERA_PTZ(InstanceID: Integer, value: Variant)
+BLUEIRISCAMERA_PTZ(InstanceID: Integer, Camera: String, PTZ_CMD: int)
 ```
-PTZ Steuerung der Kamera
+PTZ Steuerung der Kamera:
+
+PTZ_CMD:
+0: Pan left
+
+1: Pan right
+
+2: Tilt up
+
+3: Tilt down
+
+4: Center or home (if supported by camera)
+
+5: Zoom in
+
+6: Zoom out
+
+8..10: Power mode, 50, 60, or outdoor
+
+11..26: Brightness 0-15
+
+27..33: Contrast 0-6
+
+34..35: IR on, off
+
+101..120: Go to preset position 1..20
 
 ---
 ```php
