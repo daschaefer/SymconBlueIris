@@ -835,6 +835,9 @@ class BlueIris extends IPSModule
                     if($cam["optionValue"] == "index" || $cam["optionValue"] == "@index" || $cam["optionValue"] == "Index" || $cam["optionValue"] == "@Index")
                         continue;
 
+                    if($cam['isEnabled'] == false)
+                        continue;
+                        
                     $mediaData = $this->GetMedia($cam["optionValue"]);
                     
                     $out .= "<div class=\"bi_grid_media\"><img src=\"".$mediaData['mediaURL']."\" type=\"video/mpeg\"/></div>";
