@@ -10,6 +10,7 @@
                         { "label": "Minimal",           "value": "minimal"},
                         { "label": "Vollständig",       "value": "full"}
                 ]},
+                { "name": "GridMaxX",                       "type": "NumberSpinner",        "caption": "Max. Breite pro Kamera im Raster:" },
                 {
                         "type": "ExpansionPanel",
                         "caption": "Image Grabber Einstellungen",

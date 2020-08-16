@@ -48,9 +48,13 @@ Danach ist es möglich eine neue BlueIris Instanz innerhalb des Objektbaumes von
 
 *Minimal legt nur die wichtigsten Variablen an, Vollständig legt alle Variablen an die über die API übermittelt werden*
 
+**Max. Breite pro Kamera im Raster:**
+
+*Legt die maximale Breite in Pixeln pro Kamerabild im Raster fest. Standard ist 600px. Die Einstellung ermöglicht es je nach Auflösung des Endgerätes eine schöne Darstellung des Rasters herzustellen. Das Raster funktioniert nur bei deaktiviertem Image Grabber!*
+
 **Image Grabber verwenden:**
 
-*Kamerabild über Image Grabber holen, dies ermöglicht die Verwendung von Symcon Connect*
+*Kamerabild über Image Grabber holen, dies ermöglicht die Verwendung von Symcon Connect. Setzt die Rasterdarstellung außer Kraft.*
 
 **Aktualisierungsintervall:**
 

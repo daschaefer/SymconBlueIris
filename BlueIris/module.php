@@ -1,4 +1,4 @@
-<?
+<?php
 
 class BlueIris extends IPSModule
 {       
@@ -18,6 +18,7 @@ class BlueIris extends IPSModule
         $this->RegisterPropertyInteger('ControllerScriptID', -1);
         $this->RegisterPropertyBoolean('IG_Enabled', false);
         $this->RegisterPropertyInteger('IG_RefreshInterval', 10);
+        $this->RegisterPropertyInteger('GridMaxX', 600);
     }
     
     public function ApplyChanges()
@@ -85,6 +86,16 @@ class BlueIris extends IPSModule
             SetValue($var, false);
         }
 
+        $var = @IPS_GetObjectIDByIdent("CameraGridHTML", $this->InstanceID);
+        if(!$var) {
+            $var = IPS_CreateVariable(3);
+            IPS_SetName($var, "Kamera Raster");
+            IPS_SetIdent($var, "CameraGridHTML");
+            IPS_SetVariableCustomProfile($var, "~HTMLBox");
+            IPS_SetParent($var, $this->InstanceID);
+
+            SetValue($var, "");
+        }
         
         $var = @IPS_GetObjectIDByIdent("Alarm", $this->InstanceID);
         if(!$var) {
@@ -136,6 +147,7 @@ class BlueIris extends IPSModule
             IPS_SetEventActive($updateCheck, true);
         }
 
+        $this->RenderCameraGrid();
         $this->Update();
     }
 
@@ -270,7 +282,7 @@ class BlueIris extends IPSModule
                             IPS_SetProperty($grabber, 'Interval', $this->ReadPropertyInteger("IG_RefreshInterval"));
                             IPS_ApplyChanges($grabber);
 
-                            IG_UpdateImage($grabber);
+                            @IG_UpdateImage($grabber);
                         } else {
                             if($this->ReadPropertyInteger("IG_RefreshInterval") != IPS_GetProperty($grabber, 'Interval')) {
                                 IPS_SetProperty($grabber, 'Interval', $this->ReadPropertyInteger("IG_RefreshInterval"));
@@ -782,6 +794,57 @@ class BlueIris extends IPSModule
         $htmlVar = IPS_GetObjectIDByIdent("CameraEventListHTML", $alarmListPopUp);
 
         SetValue($htmlVar, $html);
+    }
+
+    private function RenderCameraGrid() {
+        $grid = @IPS_GetObjectIDByIdent("CameraGridHTML", $this->InstanceID);
+
+        if(!$grid)
+            return;
+
+            if($this->ReadPropertyBoolean("IG_Enabled") == true) {
+                SetValue($grid, "");
+                return;
+            }
+
+            $out = "   <style type='text/css'>
+                            .bi_grid_parent {
+                                display: flex;
+                                justify-content: space-evenly;
+                                flex-wrap: wrap;
+                            }
+                            
+                            .bi_grid_media {
+                                padding: 10px;
+                                margin: 10px 10px;
+                                flex-basis: 15%;
+                            }
+
+                            .bi_grid_media img {
+                                max-width: ".$this->ReadPropertyInteger("GridMaxX")."px;
+                                border: 1px solid rgba(255,255,255,0.15);
+                            }
+                        </style>";
+            
+            $result = json_decode($this->GetCamList(), true);
+
+            if($result != null) {
+                $out .= "<div class=\"bi_grid_parent\">";
+
+                foreach($result["data"] as $cam) {
+                    if($cam["optionValue"] == "index" || $cam["optionValue"] == "@index" || $cam["optionValue"] == "Index" || $cam["optionValue"] == "@Index")
+                        continue;
+
+                    $mediaData = $this->GetMedia($cam["optionValue"]);
+                    
+                    $out .= "<div class=\"bi_grid_media\"><img src=\"".$mediaData['mediaURL']."\" type=\"video/mpeg\"/></div>";
+                }
+
+                $out .= "</div>";
+            }
+
+
+            SetValue($grid, $out);
     }
     
     
